@@ -100,6 +100,9 @@ int tfs_close(int fhandle) { return remove_from_open_file_table(fhandle); }
 
 ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     open_file_entry_t *file = get_open_file_entry(fhandle);
+    bool writes_in_mult_blocks = false;
+    size_t save_to_write;
+    int copy_to_write = (int)to_write;
     if (file == NULL) {
         return -1;
     }
@@ -111,23 +114,59 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     }
     int block_index = (int)inode->i_size / BLOCK_SIZE;
 
-    size_t to_write_portion=to_write;
-    int copy_to_write = (int)to_write;
     /* Determine how many bytes to write */
+    if (to_write + file->of_offset > (block_index + 1) * BLOCK_SIZE) {
+        writes_in_mult_blocks = true;
+        to_write = (size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
+        copy_to_write -= (int)to_write;
+    }
 
-    while(copy_to_write>0) {
-        block_index = (int)inode->i_size / BLOCK_SIZE;
-        if (copy_to_write>BLOCK_SIZE){
-            to_write_portion=BLOCK_SIZE;
+    if (writes_in_mult_blocks) {
+        void *block = data_block_get(inode->i_data_block[block_index]);
+        if (block == NULL) {
+            return -1;
         }
 
-        printf("to_write_portion: %ld\n",to_write_portion);
-        printf("block_index: %d\n",block_index);
-        if (to_write_portion + file->of_offset > (block_index + 1) * BLOCK_SIZE) {
-            to_write_portion = (size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
+        /* Perform the actual write */
+        memcpy(block + file->of_offset, buffer, to_write);
+
+        /* The offset associated with the file handle is
+         * incremented accordingly */
+        file->of_offset += to_write;
+        if (file->of_offset > inode->i_size) {
+            inode->i_size = file->of_offset;
         }
-        printf("to_write_portion: %ld\n",to_write_portion);
-        if (inode->i_size%BLOCK_SIZE == 0) {
+        save_to_write = (size_t)copy_to_write;
+        while (copy_to_write > 0) {
+            int aux_to_write=copy_to_write;
+            if (copy_to_write > BLOCK_SIZE){
+                aux_to_write = BLOCK_SIZE;
+            }
+            block_index = (int)inode->i_size / BLOCK_SIZE;
+            if (inode->i_size % BLOCK_SIZE == 0) {
+                inode->i_data_block[block_index] = data_block_alloc();
+            }
+            block = data_block_get(inode->i_data_block[block_index]);
+            if (block == NULL) {
+                return -1;
+            }
+
+            /* Perform the actual write */
+            memcpy(block + file->of_offset, buffer, (size_t)aux_to_write);
+
+            /* The offset associated with the file handle is
+             * incremented accordingly */
+            file->of_offset += (size_t)copy_to_write;
+            if (file->of_offset > inode->i_size) {
+                inode->i_size = file->of_offset;
+            }
+            copy_to_write -= aux_to_write;  
+        }
+        to_write += save_to_write;
+        return (ssize_t)to_write;
+    } 
+    else {
+        if (inode->i_size == 0) {
             /* If empty file, allocate new block */
             inode->i_data_block[block_index] = data_block_alloc();
         }
@@ -138,7 +177,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
         }
 
         /* Perform the actual write */
-        memcpy(block + file->of_offset, buffer, to_write_portion);
+        memcpy(block + file->of_offset, buffer, to_write);
 
         /* The offset associated with the file handle is
          * incremented accordingly */
@@ -146,12 +185,9 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
         if (file->of_offset > inode->i_size) {
             inode->i_size = file->of_offset;
         }
-        printf("copy_to_write: %d\n",copy_to_write);
-        copy_to_write-=(int)to_write_portion;
-        printf("copy_to_write: %d\n",copy_to_write);
+        return (ssize_t)to_write;
     }
-    return (ssize_t)to_write;
-    }
+}
 
 ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     open_file_entry_t *file = get_open_file_entry(fhandle);
