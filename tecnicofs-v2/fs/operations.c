@@ -117,14 +117,17 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
 
     while (copy_to_write > 0) {
         to_write_portion=(size_t) copy_to_write;
+        //printf("to_write_portion: %ld\n",to_write_portion);
         int block_index = (int)inode->i_size / BLOCK_SIZE;
+        //printf("block_index: %d\n",block_index);
 
-        if (copy_to_write > BLOCK_SIZE) {
+        if (to_write_portion > BLOCK_SIZE) {
             to_write_portion = BLOCK_SIZE;
         }
 
 
         if (to_write_portion + file->of_offset >(block_index + 1) * BLOCK_SIZE) {
+            //printf("ola\n");
             to_write_portion =(size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
         }
 
@@ -145,10 +148,12 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
         /* The offset associated with the file handle is
          * incremented accordingly */
         file->of_offset += to_write_portion;
+        //printf("offset: %ld\n",file->of_offset);
         if (file->of_offset > inode->i_size) {
             inode->i_size = file->of_offset;
         }
         copy_to_write -= (int)to_write_portion;
+        //printf("copy_to_write: %d\n",copy_to_write);
     }
     return (ssize_t)to_write;
 }
