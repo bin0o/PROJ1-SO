@@ -113,13 +113,13 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
 
     size_t to_write_portion = to_write;
     int copy_to_write = (int)to_write;
+    size_t written=0;
     /* Determine how many bytes to write */
 
     while (copy_to_write > 0) {
         to_write_portion=(size_t) copy_to_write;
-        //printf("to_write_portion: %ld\n",to_write_portion);
         int block_index = (int)inode->i_size / BLOCK_SIZE;
-        //printf("block_index: %d\n",block_index);
+
 
         if (to_write_portion > BLOCK_SIZE) {
             to_write_portion = BLOCK_SIZE;
@@ -127,7 +127,6 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
 
 
         if (to_write_portion + file->of_offset >(block_index + 1) * BLOCK_SIZE) {
-            //printf("ola\n");
             to_write_portion =(size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
         }
 
@@ -138,22 +137,30 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
 
         void *block = data_block_get(inode->i_data_block[block_index]);
 
+
+
+        int block_offset =(int) file->of_offset % BLOCK_SIZE;
+
+
+
         if (block == NULL) {
             return -1;
         }
-
+        
         /* Perform the actual write */
-        memcpy(block + file->of_offset, buffer, to_write_portion);
+        memcpy(block + block_offset, buffer +written, to_write_portion);
+        written+=to_write_portion;
 
         /* The offset associated with the file handle is
          * incremented accordingly */
+        
         file->of_offset += to_write_portion;
-        //printf("offset: %ld\n",file->of_offset);
+
         if (file->of_offset > inode->i_size) {
             inode->i_size = file->of_offset;
         }
         copy_to_write -= (int)to_write_portion;
-        //printf("copy_to_write: %d\n",copy_to_write);
+
     }
     return (ssize_t)to_write;
 }
@@ -173,6 +180,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     size_t to_read = inode->i_size - file->of_offset;
     int copy_to_read = 1;
     size_t to_read_portion = to_read;
+    size_t read=0;
 
     if (to_read >= len) {
         copy_to_read = (int)len;
@@ -180,33 +188,29 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         to_read = len;
     }
 
-    printf("to_read: %ld\n",to_read);
-    printf("copy_to_read: %d\n",copy_to_read);
-    printf("to_read_portion: %ld\n",to_read_portion);
-
     while (copy_to_read > 0) {
         to_read_portion=(size_t)copy_to_read;
         int block_index = (int)file->of_offset / BLOCK_SIZE;
-        printf("block index: %d\n",block_index);
         void *block = data_block_get(inode->i_data_block[block_index]);
         if (block == NULL) {
             return -1;
         }
-        printf("to_read_portion: %ld\n",to_read_portion);
+
         if ((to_read_portion + file->of_offset) >(block_index + 1) * BLOCK_SIZE) {
             to_read_portion =(size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
         }
-        printf("to_read_portion: %ld\n",to_read_portion);
-
+        
+        int block_offset =(int) file->of_offset % BLOCK_SIZE;
         /* Perform the actual read */
-        memcpy(buffer, block + file->of_offset, to_read_portion);
+  
+        memcpy(buffer+read, block + block_offset, to_read_portion);
+        read+=to_read_portion;
         /* The offset associated with the file handle is
          * incremented accordingly */
+        
         file->of_offset += to_read_portion;
-        printf("offset: %ld\n",file->of_offset);
 
         copy_to_read -= (int)to_read_portion;
-        printf("copy_to_read: %d\n",copy_to_read);
 
     }
 

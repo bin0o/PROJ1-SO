@@ -2,8 +2,8 @@
 #include <assert.h>
 #include <string.h>
 
-#define COUNT 40
-#define SIZE 256
+#define COUNT 1
+#define SIZE 9873
 
 /**
    This test fills in a new file up to 10 blocks via multiple writes, 
@@ -38,11 +38,7 @@ int main() {
     assert(fd != -1 );
 
     for (int i = 0; i < COUNT; i++) {
-        //printf("iter: %d\n",i);
-        //printf("input: %s\n",input);
         assert(tfs_read(fd, output, SIZE) == SIZE);
-        //printf("output: %s\n",output);
-        //printf("memcmp: %d\n",memcmp(input, output, SIZE));
         assert (memcmp(input, output, SIZE) == 0);
     }
 
