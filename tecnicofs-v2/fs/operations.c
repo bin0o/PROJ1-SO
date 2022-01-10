@@ -100,9 +100,6 @@ int tfs_close(int fhandle) { return remove_from_open_file_table(fhandle); }
 
 ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     open_file_entry_t *file = get_open_file_entry(fhandle);
-    bool writes_in_mult_blocks = false;
-    size_t save_to_write;
-    int copy_to_write = (int)to_write;
     if (file == NULL) {
         return -1;
     }
@@ -112,81 +109,48 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     if (inode == NULL) {
         return -1;
     }
-    int block_index = (int)inode->i_size / BLOCK_SIZE;
+    
 
+    size_t to_write_portion = to_write;
+    int copy_to_write = (int)to_write;
     /* Determine how many bytes to write */
-    if (to_write + file->of_offset > (block_index + 1) * BLOCK_SIZE) {
-        writes_in_mult_blocks = true;
-        to_write = (size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
-        copy_to_write -= (int)to_write;
-    }
 
-    if (writes_in_mult_blocks) {
-        void *block = data_block_get(inode->i_data_block[block_index]);
-        if (block == NULL) {
-            return -1;
+    while (copy_to_write > 0) {
+        to_write_portion=(size_t) copy_to_write;
+        int block_index = (int)inode->i_size / BLOCK_SIZE;
+
+        if (copy_to_write > BLOCK_SIZE) {
+            to_write_portion = BLOCK_SIZE;
         }
 
-        /* Perform the actual write */
-        memcpy(block + file->of_offset, buffer, to_write);
 
-        /* The offset associated with the file handle is
-         * incremented accordingly */
-        file->of_offset += to_write;
-        if (file->of_offset > inode->i_size) {
-            inode->i_size = file->of_offset;
+        if (to_write_portion + file->of_offset >(block_index + 1) * BLOCK_SIZE) {
+            to_write_portion =(size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
         }
-        save_to_write = (size_t)copy_to_write;
-        while (copy_to_write > 0) {
-            int aux_to_write=copy_to_write;
-            if (copy_to_write > BLOCK_SIZE){
-                aux_to_write = BLOCK_SIZE;
-            }
-            block_index = (int)inode->i_size / BLOCK_SIZE;
-            if (inode->i_size % BLOCK_SIZE == 0) {
-                inode->i_data_block[block_index] = data_block_alloc();
-            }
-            block = data_block_get(inode->i_data_block[block_index]);
-            if (block == NULL) {
-                return -1;
-            }
 
-            /* Perform the actual write */
-            memcpy(block + file->of_offset, buffer, (size_t)aux_to_write);
-
-            /* The offset associated with the file handle is
-             * incremented accordingly */
-            file->of_offset += (size_t)copy_to_write;
-            if (file->of_offset > inode->i_size) {
-                inode->i_size = file->of_offset;
-            }
-            copy_to_write -= aux_to_write;  
-        }
-        to_write += save_to_write;
-        return (ssize_t)to_write;
-    } 
-    else {
-        if (inode->i_size == 0) {
-            /* If empty file, allocate new block */
+        if (inode->i_size % BLOCK_SIZE == 0) {
+            /* If empty block, allocate new block */
             inode->i_data_block[block_index] = data_block_alloc();
         }
 
         void *block = data_block_get(inode->i_data_block[block_index]);
+
         if (block == NULL) {
             return -1;
         }
 
         /* Perform the actual write */
-        memcpy(block + file->of_offset, buffer, to_write);
+        memcpy(block + file->of_offset, buffer, to_write_portion);
 
         /* The offset associated with the file handle is
          * incremented accordingly */
-        file->of_offset += to_write;
+        file->of_offset += to_write_portion;
         if (file->of_offset > inode->i_size) {
             inode->i_size = file->of_offset;
         }
-        return (ssize_t)to_write;
+        copy_to_write -= (int)to_write_portion;
     }
+    return (ssize_t)to_write;
 }
 
 ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
@@ -200,38 +164,45 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     if (inode == NULL) {
         return -1;
     }
-
     /* Determine how many bytes to read */
     size_t to_read = inode->i_size - file->of_offset;
-    int aux_to_read=1;
-    size_t to_read_portion=to_read;
+    int copy_to_read = 1;
+    size_t to_read_portion = to_read;
 
-    if (to_read > len) {
-        aux_to_read =(int) len;
+    if (to_read >= len) {
+        copy_to_read = (int)len;
         to_read_portion = len;
-        to_read =len;
+        to_read = len;
     }
 
-    while (aux_to_read>0) {
+    printf("to_read: %ld\n",to_read);
+    printf("copy_to_read: %d\n",copy_to_read);
+    printf("to_read_portion: %ld\n",to_read_portion);
+
+    while (copy_to_read > 0) {
+        to_read_portion=(size_t)copy_to_read;
         int block_index = (int)file->of_offset / BLOCK_SIZE;
+        printf("block index: %d\n",block_index);
         void *block = data_block_get(inode->i_data_block[block_index]);
         if (block == NULL) {
             return -1;
         }
-        if ((to_read_portion+file->of_offset)>(block_index + 1) * BLOCK_SIZE){
-            to_read_portion= (size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
+        printf("to_read_portion: %ld\n",to_read_portion);
+        if ((to_read_portion + file->of_offset) >(block_index + 1) * BLOCK_SIZE) {
+            to_read_portion =(size_t)(block_index + 1) * BLOCK_SIZE - file->of_offset;
         }
+        printf("to_read_portion: %ld\n",to_read_portion);
 
         /* Perform the actual read */
         memcpy(buffer, block + file->of_offset, to_read_portion);
         /* The offset associated with the file handle is
          * incremented accordingly */
-        file->of_offset += to_read;
-        
-        aux_to_read-=(int)to_read_portion;
-        if(to_read_portion<len){
-            break;
-        }
+        file->of_offset += to_read_portion;
+        printf("offset: %ld\n",file->of_offset);
+
+        copy_to_read -= (int)to_read_portion;
+        printf("copy_to_read: %d\n",copy_to_read);
+
     }
 
     return (ssize_t)to_read;
