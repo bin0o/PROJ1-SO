@@ -115,10 +115,10 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     int copy_to_write = (int)to_write;
     size_t written=0;
     /* Determine how many bytes to write */
-
+    int block_index;
     while (copy_to_write > 0) {
         to_write_portion=(size_t) copy_to_write;
-        int block_index = (int)inode->i_size / BLOCK_SIZE;
+        block_index = (int)inode->i_size / BLOCK_SIZE;
 
 
         if (to_write_portion > BLOCK_SIZE) {
@@ -134,7 +134,6 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             /* If empty block, allocate new block */
             inode->i_data_block[block_index] = data_block_alloc();
         }
-
         void *block = data_block_get(inode->i_data_block[block_index]);
 
 
@@ -178,7 +177,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     }
     /* Determine how many bytes to read */
     size_t to_read = inode->i_size - file->of_offset;
-    int copy_to_read = 1;
+    int copy_to_read = (int)to_read;
     size_t to_read_portion = to_read;
     size_t read=0;
 
@@ -215,4 +214,33 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     }
 
     return (ssize_t)to_read;
+}
+
+int tfs_copy_to_external_fs(char const *source_path, char const *dest_path) {
+
+    int f = tfs_open(source_path, 0);
+
+    open_file_entry_t *file = get_open_file_entry(f);
+    if (file == NULL) {
+        return -1;
+    }
+
+    inode_t *inode = inode_get(file->of_inumber);
+    if (inode == NULL) {
+        return -1;
+    }
+
+    char *buffer=(char *)malloc(inode->i_size);
+    ssize_t reading = tfs_read(f,buffer,inode->i_size);
+    if (reading < 0){
+      return -1;
+   }
+    tfs_close(f);
+
+    FILE *fd;
+    fd = fopen(dest_path, "w");
+    fwrite(buffer,(size_t) reading, sizeof(char), fd);
+    fclose(fd);
+    free(buffer);
+    return 0;
 }
