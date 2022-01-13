@@ -21,7 +21,8 @@ TARGET_EXECS := tests/test1 tests/copy_to_external_simple tests/copy_to_external
 vpath # clears VPATH
 vpath %.h $(INCLUDE_DIRS)
 
-CFLAGS = -std=c11 -D_POSIX_C_SOURCE=200809L
+CFLAGS = -std=c11 -D_POSIX_C_SOURCE=200809Lc -pthread
+LDFLAGS+= -pthread
 CFLAGS += $(INCLUDES)
 
 # Warnings
