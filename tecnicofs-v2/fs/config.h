@@ -9,6 +9,8 @@
 #define INODE_TABLE_SIZE (50)
 #define MAX_OPEN_FILES (20)
 #define MAX_FILE_NAME (40)
+#define MAX_DIRECT_BLOCKS (10)
+#define BLOCK_TABLE_SIZE (11)
 
 #define DELAY (5000)
 

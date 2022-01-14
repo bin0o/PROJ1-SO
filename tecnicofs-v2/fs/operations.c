@@ -1,15 +1,13 @@
 #include "operations.h"
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 
 pthread_mutex_t lock;
 
 pthread_rwlock_t lock1;
-
-
 
 int tfs_init() {
     state_init();
@@ -116,33 +114,41 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     if (inode == NULL) {
         return -1;
     }
+    
+    int indirect_block_index;
+    void *block;
+    int *indirect_block;
+
+    if (to_write + file->of_offset >
+        (MAX_DIRECT_BLOCKS + (BLOCK_SIZE / sizeof(int))) * BLOCK_SIZE) {
+        to_write = (size_t)(MAX_DIRECT_BLOCKS + (BLOCK_SIZE / sizeof(int))) *
+                       BLOCK_SIZE -
+                   file->of_offset;
+    }
 
     size_t to_write_portion = to_write;
     int copy_to_write = (int)to_write;
     size_t written = 0;
     /* Determine how many bytes to write */
-    int block_index;
-    int indirect_block_index;
-    void *block;
-    int *indirect_block;
+
     while (copy_to_write > 0) {
-        block_index = (int)inode->i_size / BLOCK_SIZE;
+        int block_index = (int)inode->i_size / BLOCK_SIZE;
         indirect_block_index = block_index;
-        if (block_index >= 10) {
-            indirect_block_index -= 10;
-            if (inode->i_data_block[10] == -1) {
-                inode->i_data_block[10] = data_block_alloc();
+        if (block_index >= MAX_DIRECT_BLOCKS) {
+            indirect_block_index -= MAX_DIRECT_BLOCKS;
+            if (inode->i_data_block[MAX_DIRECT_BLOCKS] == -1) {
+                inode->i_data_block[MAX_DIRECT_BLOCKS] = data_block_alloc();
             }
 
             indirect_block =
-                (int *)data_block_get(inode->i_data_block[10]);
+                (int *)data_block_get(inode->i_data_block[MAX_DIRECT_BLOCKS]);
 
             if (indirect_block == NULL) {
                 return -1;
             }
 
             if (inode->i_size % BLOCK_SIZE == 0 &&
-                file->of_offset == inode->i_size) { // MUDAR
+                file->of_offset == inode->i_size) {
                 /* If empty block, allocate new block */
                 indirect_block[indirect_block_index] = data_block_alloc();
             }
@@ -153,8 +159,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
                 return -1;
             }
 
-        } 
-        else {
+        } else {
             if (inode->i_size % BLOCK_SIZE == 0 &&
                 file->of_offset == inode->i_size) {
                 /* If empty block, allocate new block */
@@ -171,9 +176,8 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             to_write_portion = BLOCK_SIZE;
         }
 
-        if (to_write_portion + file->of_offset%BLOCK_SIZE > BLOCK_SIZE) {
-            to_write_portion =
-                BLOCK_SIZE - file->of_offset%BLOCK_SIZE;
+        if (to_write_portion + file->of_offset % BLOCK_SIZE > BLOCK_SIZE) {
+            to_write_portion = BLOCK_SIZE - file->of_offset % BLOCK_SIZE;
         }
 
         int block_offset = (int)file->of_offset % BLOCK_SIZE;
@@ -207,6 +211,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         return -1;
     }
     /* Determine how many bytes to read */
+
     size_t to_read = inode->i_size - file->of_offset;
     int copy_to_read = (int)to_read;
     size_t to_read_portion = to_read;
@@ -218,16 +223,23 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         to_read = len;
     }
 
+    if (to_read + file->of_offset >
+        (MAX_DIRECT_BLOCKS + (BLOCK_SIZE / sizeof(int))) * BLOCK_SIZE) {
+        to_read = (size_t)(MAX_DIRECT_BLOCKS + (BLOCK_SIZE / sizeof(int))) *
+                      BLOCK_SIZE -
+                  file->of_offset;
+    }
+
     void *block;
-    int* indirect_block;
+    int *indirect_block;
     int indirect_block_index;
     while (copy_to_read > 0) {
         int block_index = (int)file->of_offset / BLOCK_SIZE;
-        indirect_block_index=block_index;
-        if (block_index>=10){
-            indirect_block_index-=10;
+        indirect_block_index = block_index;
+        if (block_index >= MAX_DIRECT_BLOCKS) {
+            indirect_block_index -= MAX_DIRECT_BLOCKS;
             indirect_block =
-                (int *)data_block_get(inode->i_data_block[10]);
+                (int *)data_block_get(inode->i_data_block[MAX_DIRECT_BLOCKS]);
 
             if (indirect_block == NULL) {
                 return -1;
@@ -238,9 +250,8 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
             if (block == NULL) {
                 return -1;
             }
-            
-        }
-        else{
+
+        } else {
             block = data_block_get(inode->i_data_block[block_index]);
             if (block == NULL) {
                 return -1;
@@ -249,9 +260,8 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
         to_read_portion = (size_t)copy_to_read;
 
-        if ((to_read_portion + file->of_offset%BLOCK_SIZE) >BLOCK_SIZE) {
-            to_read_portion =
-                BLOCK_SIZE - file->of_offset%BLOCK_SIZE;
+        if ((to_read_portion + file->of_offset % BLOCK_SIZE) > BLOCK_SIZE) {
+            to_read_portion = BLOCK_SIZE - file->of_offset % BLOCK_SIZE;
         }
 
         int block_offset = (int)file->of_offset % BLOCK_SIZE;
