@@ -25,6 +25,8 @@ typedef struct {
     inode_type i_node_type;
     size_t i_size;
     int i_data_block[BLOCK_TABLE_SIZE];
+    pthread_mutex_t inode_mutex;
+    pthread_rwlock_t inode_rwlock;
     /* in a real FS, more fields would exist here */
 } inode_t;
 

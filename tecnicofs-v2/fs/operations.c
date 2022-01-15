@@ -306,7 +306,7 @@ int tfs_copy_to_external_fs(char const *source_path, char const *dest_path) {
         return -1;
     }
     fwrite(buffer, (size_t)reading, sizeof(char), fd);
-    fclose(fd);
     free(buffer);
+    fclose(fd);
     return 0;
 }

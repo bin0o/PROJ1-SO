@@ -2,8 +2,8 @@
 #include <assert.h>
 #include <string.h>
 
-#define COUNT 1000
-#define SIZE 273
+#define COUNT 40
+#define SIZE 256
 
 /**
    This test fills in a new file up to 10 blocks via multiple writes, 
@@ -15,7 +15,7 @@
 int main() {
 
     char *path = "/f1";
-
+    
     /* Writing this buffer multiple times to a file stored on 1KB blocks will 
        always hit a single block (since 1KB is a multiple of SIZE=256) */
     char input[SIZE]; 
